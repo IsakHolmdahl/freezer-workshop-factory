@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
-STEPS = ["services", "testcontainers", "scion_settings_step", "scion_start", "hub_wiring", "cross_project", "doctor_step"]
+STEPS = ["services", "testcontainers", "scion_settings_step", "scion_start", "hub_wiring", "cross_project", "doctor_step", "copilot"]
 # Captured before the autouse guard patches subprocess: `--help` never starts a process.
 REAL_RUN = subprocess.run
 

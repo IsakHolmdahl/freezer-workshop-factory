@@ -72,7 +72,11 @@ PROVIDERS = {
     "openrouter": "OpenRouter",
     "openai_compatible": "Any OpenAI-compatible endpoint (asks for its base URL)",
     "ollama": "Ollama on this machine (no key)",
+    "github_copilot": "GitHub Copilot subscription (GitHub login instead of a key: make setup-copilot)",
 }
+# Copilot model IDs (dotted versions) for the endpoints, set when Copilot is picked
+# and the endpoints still name the asf.yaml defaults. Same defaults as ai-software-factory.
+COPILOT_ENDPOINTS = {"small": "claude-haiku-5.5", "medium": "claude-sonnet-5.5", "large": "claude-sonnet-5.5"}
 # Base URL asked for these providers; the default reaches the host from the MLflow container.
 API_BASE_DEFAULTS = {"openai_compatible": "", "ollama": "http://host.docker.internal:11434"}
 
@@ -105,6 +109,13 @@ def _ensure_model_provider(ctx: Context) -> None:
                       API_BASE_DEFAULTS[provider])
         if base:
             fe.set_local("mlflow.api_base", base.rstrip("/"))
+    if provider == "github_copilot":
+        if provider != current and fe.get("mlflow.endpoints", {}, fe.config()) == fe.get("mlflow.endpoints", {}, fe._load(fe.CONFIG_FILE)):
+            for size, model in COPILOT_ENDPOINTS.items():
+                fe.set_local(f"mlflow.endpoints.{size}", model)
+            ui.info("saved Copilot model names under mlflow.endpoints in " + fe.LOCAL_CONFIG_FILE.name)
+        ui.info("GitHub Copilot needs no API key; the copilot step (make setup-copilot) logs MLflow in")
+        return
     if provider in fe.KEYLESS_PROVIDERS:
         return
     try:

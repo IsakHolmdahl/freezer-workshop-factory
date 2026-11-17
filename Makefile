@@ -4,7 +4,7 @@ VENV_STAMP := .venv/.requirements-installed
 
 .DEFAULT_GOAL := help
 .PHONY: help venv start setup setup-auto setup-dry-run setup-services setup-scion setup-cli setup-images \
-        setup-start setup-github setup-github-rotate setup-publish \
+        setup-start setup-github setup-github-rotate setup-publish setup-copilot \
         doctor doctor-quick doctor-fix cleanup cleanup-dry-run cleanup-auto cleanup-volumes test
 
 help:
@@ -13,6 +13,7 @@ help:
 	@echo 'make setup-auto            Unattended installation (accept defaults)'
 	@echo 'make setup-dry-run         Preview installation'
 	@echo 'make setup-services        Start MLflow, Dolt and telemetry; check the model endpoints'
+	@echo 'make setup-copilot         Log MLflow in to GitHub Copilot (browser, pasted token or editor login)'
 	@echo 'make setup-scion           Choose CLI location and build Scion'
 	@echo 'make setup-cli             Install/update CLI shim and helpers without building Scion'
 	@echo 'make setup-images          Build the OpenCode agent images'
@@ -54,7 +55,10 @@ setup-dry-run: venv
 	@"$(VENV_PYTHON)" scripts/setup.py --yes --dry-run
 
 setup-services: venv
-	@"$(VENV_PYTHON)" scripts/setup.py --only configuration,services,endpoints
+	@"$(VENV_PYTHON)" scripts/setup.py --only configuration,services,copilot,endpoints
+
+setup-copilot: venv
+	@"$(VENV_PYTHON)" scripts/steps/copilot.py $(COPILOT_ARGS)
 
 setup-start: venv
 	@"$(VENV_PYTHON)" scripts/setup.py --only scion_settings,scion_start
@@ -104,7 +108,7 @@ test: venv
 	@"$(VENV_PYTHON)" -m pytest
 else
 venv start setup setup-auto setup-dry-run setup-services setup-scion setup-cli setup-images \
-setup-start setup-github setup-github-rotate setup-publish \
+setup-start setup-github setup-github-rotate setup-publish setup-copilot \
 doctor doctor-quick doctor-fix cleanup cleanup-dry-run cleanup-auto cleanup-volumes test:
 	@sh scripts/docker-python.sh "$@"
 endif

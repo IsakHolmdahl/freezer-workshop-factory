@@ -48,6 +48,8 @@ STEPS: dict[str, Step] = {step.name: step for step in [
     Step("configuration", "configuration", ".env, secrets, model provider key, admin identity", needs_adapter=False),
     Step("services", "services", "start MLflow, Dolt and telemetry", task="services",
          needs_adapter=False),
+    Step("copilot", "copilot", "GitHub Copilot login for MLflow (provider github_copilot only)",
+         task="services", needs_adapter=False),
     Step("endpoints", "endpoints", "check the agent gateway model endpoints", task="services",
          needs_adapter=False),
     Step("scion_cli", "scion_cli", "choose Scion install location and offer duplicate cleanup", task="scion-build",

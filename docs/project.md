@@ -52,7 +52,7 @@ agent gets the project's memories in its instructions at start.
 | `harness-configs/asf-opencode/` | ASF OpenCode harness: see [opencode-harness.md](opencode-harness.md) |
 | `templates/` | Agent roles: see [templates-and-skills.md](templates-and-skills.md) |
 | `skills/` | Skills published to the Hub as `skill://scion/global/<name>` |
-| `mlflow/bootstrap/` | MLflow startup: endpoint seeding for the configured provider (`seed_gateway.py`), trace sessions |
+| `mlflow/bootstrap/` | MLflow startup: endpoint seeding for the configured provider (`seed_gateway.py`), GitHub Copilot login and LiteLLM fixes (`copilot_login.py`, `sitecustomize.py`), trace sessions |
 | `dolt/` | Dolt server image for Beads |
 | `telemetry/` | OTEL collector, Prometheus, Grafana, and the run exporter that groups agent metrics per epic (see `TELEMETRY.md`) |
 | `scripts/` | Build, sync and inspection tools (below) |

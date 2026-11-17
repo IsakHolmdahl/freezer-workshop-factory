@@ -1,7 +1,7 @@
 """Idempotently create or reconcile the AI Gateway endpoints behind one model provider.
 
 Provider: MLFLOW_GATEWAY_PROVIDER (any MLflow AI Gateway provider: anthropic, openai,
-gemini, openrouter, ollama, openai_compatible, ...), its key in MODEL_PROVIDER_API_KEY
+gemini, openrouter, ollama, openai_compatible, github_copilot, ...), its key in MODEL_PROVIDER_API_KEY
 and, for self-hosted or OpenAI-compatible providers, MLFLOW_GATEWAY_API_BASE.
 
 Endpoints: the size tiers small, medium, large used by the agent templates (`model: small|medium|large`). Override a tier's models with
@@ -28,7 +28,8 @@ API_KEY = os.environ.get("MODEL_PROVIDER_API_KEY", "")
 API_BASE = os.environ.get("MLFLOW_GATEWAY_API_BASE", "")
 SECRET_NAME = f"asf-{PROVIDER}"
 # Providers that run without a key (the gateway still stores a placeholder secret).
-KEYLESS_PROVIDERS = {"ollama"}
+# github_copilot authenticates from the device-login token in GITHUB_COPILOT_TOKEN_DIR.
+KEYLESS_PROVIDERS = {"ollama", "github_copilot"}
 
 session = requests.Session()
 # Retries connection failures while the server is still starting.

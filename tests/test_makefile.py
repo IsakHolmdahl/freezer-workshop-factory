@@ -39,7 +39,7 @@ def run_make(checkout, *args):
 @pytest.mark.parametrize(("target", "expected"), [
     ("setup", []), ("setup-auto", ["--yes"]),
     ("setup-dry-run", ["--yes", "--dry-run"]),
-    ("setup-services", ["--only", "configuration,services,endpoints"]),
+    ("setup-services", ["--only", "configuration,services,copilot,endpoints"]),
     ("setup-start", ["--only", "scion_settings,scion_start"]),
     ("setup-scion", ["--only", "scion_cli,build_scion"]),
     ("setup-cli", []),

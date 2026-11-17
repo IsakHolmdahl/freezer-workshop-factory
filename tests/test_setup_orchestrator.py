@@ -202,7 +202,7 @@ def test_menu_moves_cross_project_to_shim_and_keeps_experimental_docker_unticked
 
 def test_services_task_runs_services_and_endpoints(monkeypatch):
     names = orchestrator.steps_for_tasks(["services"])
-    assert names == ["prerequisites", "configuration", "services", "endpoints", "doctor"]
+    assert names == ["prerequisites", "configuration", "services", "copilot", "endpoints", "doctor"]
 
 
 def test_yes_runs_every_task_once(monkeypatch):

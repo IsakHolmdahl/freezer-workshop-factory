@@ -50,8 +50,9 @@ agent_gateway:
 mlflow:
   port: 5001
   # Provider MLflow routes every endpoint to: any MLflow AI Gateway provider
-  # (anthropic, openai, gemini, openrouter, openai_compatible, ollama, ...).
+  # (anthropic, openai, gemini, openrouter, openai_compatible, ollama, github_copilot, ...).
   # Its API key is MODEL_PROVIDER_API_KEY in .env.secrets (setup asks for it).
+  # github_copilot needs no key: make setup-copilot logs MLflow in to GitHub.
   provider: anthropic
   # Base URL for openai_compatible, ollama or a proxy, as seen from the MLflow
   # container (host services: http://host.docker.internal:<port>). Empty: provider default.

@@ -53,7 +53,7 @@ MLflow routes the gateway endpoints `small`, `medium` and `large` to one provide
 
 ```yaml
 mlflow:
-  provider: openai              # anthropic (default), openai, gemini, openrouter, openai_compatible, ollama, ...
+  provider: openai              # anthropic (default), openai, gemini, openrouter, openai_compatible, ollama, github_copilot, ...
   api_base: ""                  # only for openai_compatible, ollama or a proxy
   endpoints:
     small: gpt-5.5-mini
@@ -66,6 +66,38 @@ the provider and the key once (hidden input) when the key is missing; `--yes`
 never asks and reports that the endpoints will not answer yet. `ollama` needs no
 key; its `api_base` is the URL as seen from the MLflow container
 (`http://host.docker.internal:11434`).
+
+### GitHub Copilot
+
+With a Copilot subscription, MLflow can route the endpoints to Copilot instead of
+a paid API key:
+
+```yaml
+mlflow:
+  provider: github_copilot
+  endpoints:                    # Copilot model IDs use dots
+    small: claude-haiku-5.5
+    medium: claude-sonnet-5.5
+    large: claude-sonnet-5.5
+```
+
+Picking Copilot in the setup prompt writes these. No `MODEL_PROVIDER_API_KEY` is
+needed; MLflow keeps a GitHub OAuth login in the `copilot-token` volume instead.
+The `copilot` step (also `make setup-copilot`) puts a valid one there in one of three ways:
+
+- **browser**: GitHub device login. The step restarts MLflow, shows the code,
+  opens https://github.com/login/device and detects the login.
+- **token**: paste a Copilot-enabled GitHub OAuth token (`gho_...`, from a Copilot
+  login, not a PAT) into a hidden prompt.
+- **local**: reuse the Copilot login of an editor on this machine
+  (`~/.config/github-copilot/apps.json` or `hosts.json`); offered only when found.
+
+Each token is checked against Copilot before it is written to MLflow through stdin;
+MLflow then restarts. To replace a stored login: `make setup-copilot COPILOT_ARGS=--replace`.
+Unattended: `printf %s "$TOKEN" | .venv/bin/python scripts/steps/copilot.py --token-stdin`.
+After switching the provider, recreate the container (below) before logging in.
+LiteLLM's Copilot adapter would otherwise rewrite agents' system prompts; see
+[mlflow/README.md](../mlflow/README.md#github-copilot).
 
 To change provider, models or key later: edit `asf.local.yaml` / `.env.secrets`,
 then run `make setup-services`. It rewrites `.env`, and the `endpoints` step
@@ -279,6 +311,7 @@ In the order `make setup` runs them:
 | `prerequisites.py` | Checks the platform (native Windows and checkouts under `/mnt/<drive>` are refused with the fix), Docker, Compose >= 2.24, git, make, Go, npm and jq; initialises the Scion submodule if it is missing | no | `prerequisites.py --dry-run` |
 | `configuration.py` | Writes `.env` (for Compose) and `.env.secrets`: model provider and its API key, admin identity, Dolt passwords. Saves a provider choice in `asf.local.yaml` | no | `configuration.py --yes` |
 | `services.py` | Creates the external Docker network if missing, then starts MLflow, Dolt and telemetry with `compose.yaml` (`deployments/stack.start_core`); waits until healthy | no | `services.py --no-build` |
+| `copilot.py` | Only for `mlflow.provider: github_copilot`: logs MLflow in to GitHub Copilot by browser device login, a pasted token or an editor's Copilot login; skipped with `--yes` ([details](#github-copilot)) | no | `copilot.py --replace`, `copilot.py --token-stdin` |
 | `endpoints.py` | Seeds the MLflow gateway (provider key, endpoint models), then probes each agent gateway model with one small call; asks before continuing if one fails | no | `endpoints.py --yes` |
 | `scion_cli.py` | Before the build, finds Scion on `PATH` and in `~/.local/bin`, `~/.config/scion/`, `/usr/local/bin` and the configured location. Asks where to install, saves `scion.install_path`, offers duplicate cleanup | no | `scion_cli.py --dry-run` |
 | `build.py` | `scion`: Scion CLI, Hub and web UI from the submodule; installs the ASF CLI shim at the selected location and the upstream binary alongside it as `scion-real`. `images`: the base image, `asf-opencode` and its tool variants | no | `build.py scion --install-path ~/.local/bin/scion`; `build.py images --dry-run` |

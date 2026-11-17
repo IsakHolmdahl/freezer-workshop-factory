@@ -128,8 +128,10 @@ services:
       - path: .env.secrets   # MODEL_PROVIDER_API_KEY, read by bootstrap/seed_gateway.py
         required: false
     environment:
-      # Loaded in every Python worker (trace sessions, see mlflow/bootstrap).
+      # Loaded in every Python worker (LiteLLM fixes, trace sessions; see mlflow/bootstrap).
       PYTHONPATH: /opt/mlflow-bootstrap
+      # GitHub Copilot login (provider github_copilot); kept in the copilot-token volume.
+      GITHUB_COPILOT_TOKEN_DIR: /var/lib/litellm-copilot
       # Model provider behind the gateway endpoints (asf.yaml mlflow.provider / api_base).
       MLFLOW_GATEWAY_PROVIDER: ${MLFLOW_GATEWAY_PROVIDER:-anthropic}
       MLFLOW_GATEWAY_API_BASE: ${MLFLOW_GATEWAY_API_BASE:-}
@@ -150,6 +152,7 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - ./mlflow/bootstrap:/opt/mlflow-bootstrap:ro
+      - copilot-token:/var/lib/litellm-copilot
     entrypoint: [ sh, /opt/mlflow-bootstrap/entrypoint.sh ]
     command:
       - /bin/bash
@@ -157,6 +160,7 @@ services:
       - |
         set -e
         pip install --no-cache-dir psycopg2-binary boto3
+        python -c 'import litellm; assert litellm.disable_copilot_system_to_assistant is True'
         exec mlflow server \
           --backend-store-uri "${MLFLOW_BACKEND_STORE_URI:-postgresql://${POSTGRES_USER:-mlflow}:${POSTGRES_PASSWORD:-mlflow}@postgres:${PGPORT:-5432}/${POSTGRES_DB:-mlflow}}" \
           --artifacts-destination "${MLFLOW_ARTIFACTS_DESTINATION:-s3://${S3_BUCKET:-mlflow}}" \
@@ -186,3 +190,4 @@ volumes:
   pgdata:
   storage-data:
   dolt-data:
+  copilot-token:

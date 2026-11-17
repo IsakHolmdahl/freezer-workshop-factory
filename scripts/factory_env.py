@@ -166,7 +166,8 @@ def deployment(cfg=None):
 
 
 # Providers the MLflow AI Gateway can route to without an API key.
-KEYLESS_PROVIDERS = ("ollama",)
+# github_copilot uses a GitHub login stored in MLflow instead (make setup-copilot).
+KEYLESS_PROVIDERS = ("ollama", "github_copilot")
 
 
 def model_provider(cfg=None):

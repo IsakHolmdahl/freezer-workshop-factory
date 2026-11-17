@@ -202,6 +202,12 @@ def check_mlflow():
                        ["docker compose logs --tail 50 mlflow", "docker compose up -d mlflow"])]
     results = [Result(OK, "MLflow reachable", url)]
 
+    if fe.model_provider() == "github_copilot":
+        token = fe.run(["docker", "exec", "mlflow-server", "test", "-s", "/var/lib/litellm-copilot/access-token"])
+        results.append(Result(OK, "GitHub Copilot login stored") if token.returncode == 0 else
+                       Result(FAIL, "GitHub Copilot login stored", "no Copilot token in MLflow yet",
+                              ["make setup-copilot (browser login, pasted token or an editor's Copilot login)"]))
+
     seed = "docker exec mlflow-server python /opt/mlflow-bootstrap/seed_gateway.py"
     try:
         listed = requests.get(f"{url}/api/3.0/mlflow/gateway/endpoints/list", timeout=10).json()
@@ -228,11 +234,20 @@ def check_inference(name):
         return Result(OK, f"model {name}", f"answers ({model})")
     except (requests.RequestException, ValueError) as error:
         body = getattr(getattr(error, "response", None), "text", "")[:200]
-        fix = ([f"check MODEL_PROVIDER_API_KEY in .env.secrets and that provider {fe.model_provider()} serves the model",
+        fix = ([("check the Copilot login (make setup-copilot) and that your Copilot plan includes the model"
+                 if fe.model_provider() == "github_copilot" else
+                 f"check MODEL_PROVIDER_API_KEY in .env.secrets and that provider {fe.model_provider()} serves the model"),
                 f"change it with mlflow.endpoints.{name} (or mlflow.provider) in asf.local.yaml, then ./setup.py"]
                if fe.gateway_type() == "mlflow" else
                [f"check that {url} serves model '{name}' and AGENT_GATEWAY_API_KEY in .env.secrets"])
         return Result(FAIL, f"model {name}", f"model call failed: {error} {body}".strip(), fix)
+
+
+def copilot_device_code(since=None):
+    """Latest GitHub device code in the MLflow log (optionally only lines after `since`, RFC 3339)."""
+    logs = fe.run(["docker", "logs", "--tail", "200", *(["--since", since] if since else []), "mlflow-server"])
+    codes = re.findall(r"\b([A-Z0-9]{4}-[A-Z0-9]{4})\b", logs.stdout + logs.stderr)
+    return codes[-1] if codes else None
 
 
 def check_dolt(values):
