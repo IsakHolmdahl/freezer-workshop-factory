@@ -1,0 +1,10 @@
+.git
+.scion
+.idea
+**/node_modules
+**/__pycache__
+scion/build
+scion/web/dist
+dolt/dependencies
+site
+docs

@@ -1,0 +1,3 @@
+-r requirements.txt
+-r ../telemetry/run-exporter/requirements.txt
+pytest>=8.0

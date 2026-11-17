@@ -1,0 +1,13 @@
+schema_version: "1"
+description: "Scion template engineer that authors schema-compliant scion-agent.yaml, sharp agents.md behavioral contracts, and focused system-prompt.md personas."
+agent_instructions: agents.md
+system_prompt: system-prompt.md
+max_model_calls: 60
+max_duration: "45m"
+
+skills:
+  - uri: "skill://scion/global/output-discipline"
+  - uri: "skill://scion/global/artifact-durability"
+    optional: true
+  - uri: "skill://scion/global/beads-work-tracking"
+    optional: true

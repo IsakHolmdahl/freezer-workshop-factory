@@ -1,0 +1,188 @@
+# Core ASF stack: MLflow (+ Postgres, RustFS S3), Dolt. Requires Docker Compose >= 2.24.
+# Telemetry is included from compose/. Scion itself (Hub, broker, web UI) runs on
+# the host: `scion server start`. Layout: docs/project.md.
+include:
+  - path: compose/telemetry.yaml
+    project_directory: .
+
+services:
+  # Shared Dolt SQL server for per-project Beads (`bd`) databases (`beads_<project_id>`).
+  # Published on host loopback only; agent containers run
+  # with network_mode: host and reach it at 127.0.0.1:${DOLT_PORT:-3307}.
+  dolt:
+    image: ai-software-factory-dolt:2.0.7
+    build:
+      context: ./dolt
+      dockerfile: Dockerfile.dolt
+    env_file:
+      - path: .env
+        required: false
+      - path: .env.secrets   # DOLT_DB_PASSWORD, DOLT_ROOT_PASSWORD (32-128 chars [A-Za-z0-9_-])
+        required: false
+    environment:
+      DOLT_DATABASE: ${DOLT_DATABASE:-beads}
+      DOLT_DB_USER: ${DOLT_DB_USER:-beads}
+    ports:
+      - "127.0.0.1:${DOLT_PORT:-3307}:3306"
+    volumes:
+      - dolt-data:/var/lib/dolt
+    healthcheck:
+      test: [ "CMD", "python3", "/opt/dolt/dolt.py", "health" ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:15
+    container_name: mlflow-postgres
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-mlflow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mlflow}
+      POSTGRES_DB: ${POSTGRES_DB:-mlflow}
+      PGPORT: ${PGPORT:-5432}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - ${PGPORT:-5432}:${PGPORT:-5432}
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mlflow} -d ${POSTGRES_DB:-mlflow} -p ${PGPORT:-5432}" ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  storage:
+    image: rustfs/rustfs:1.0.0-alpha.83
+    container_name: storage
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      RUSTFS_ADDRESS: :9000
+      RUSTFS_SERVER_DOMAINS: storage:9000
+      RUSTFS_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+      RUSTFS_ACCESS_KEY: ${AWS_ACCESS_KEY_ID:-s3admin}
+      RUSTFS_SECRET_KEY: ${AWS_SECRET_ACCESS_KEY:-s3admin}
+      RUSTFS_CONSOLE_ENABLE: ${RUSTFS_CONSOLE_ENABLE:-true}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - storage-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD-SHELL", 'curl -s http://127.0.0.1:9000/health | grep -q ''"status":"ok"''' ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  create-bucket:
+    image: amazon/aws-cli:2.33.25
+    container_name: mlflow-create-bucket
+    depends_on:
+      storage:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+        set -e;
+        echo 'Waiting for S3 gateway getting ready...';
+        if aws --endpoint-url=${MLFLOW_S3_ENDPOINT_URL:-http://storage:9000} s3api head-bucket --bucket ${S3_BUCKET:-mlflow} 2>/dev/null; then
+          echo 'Bucket ${S3_BUCKET:-mlflow} already exists. Skipping creation.';
+        else
+          echo 'Creating bucket ${S3_BUCKET:-mlflow}...';
+          aws --endpoint-url=${MLFLOW_S3_ENDPOINT_URL:-http://storage:9000} s3api create-bucket --bucket ${S3_BUCKET:-mlflow} --region ${AWS_DEFAULT_REGION:-us-east-1};
+        fi
+      "
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-s3admin}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-s3admin}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+      AWS_S3_ADDRESSING_STYLE: path
+      MLFLOW_S3_ENDPOINT_URL: ${MLFLOW_S3_ENDPOINT_URL:-http://storage:9000}
+      S3_BUCKET: ${S3_BUCKET:-mlflow}
+    restart: "no"
+
+  mlflow:
+    image: "${SCION_IMAGE_REGISTRY:?set scion.image_registry in asf.yaml and run ./setup.py (writes .env)}/mlflow-full:${MLFLOW_VERSION:-latest}"
+    build:
+      context: ./mlflow
+      dockerfile: Dockerfile
+    container_name: mlflow-server
+    depends_on:
+      postgres:
+        condition: service_healthy
+      storage:
+        condition: service_healthy
+      create-bucket:
+        condition: service_completed_successfully
+    env_file:
+      - path: .env
+        required: false
+      - path: .env.secrets   # MODEL_PROVIDER_API_KEY, read by bootstrap/seed_gateway.py
+        required: false
+    environment:
+      # Loaded in every Python worker (trace sessions, see mlflow/bootstrap).
+      PYTHONPATH: /opt/mlflow-bootstrap
+      # Model provider behind the gateway endpoints (asf.yaml mlflow.provider / api_base).
+      MLFLOW_GATEWAY_PROVIDER: ${MLFLOW_GATEWAY_PROVIDER:-anthropic}
+      MLFLOW_GATEWAY_API_BASE: ${MLFLOW_GATEWAY_API_BASE:-}
+      # Backend store URI built from vars
+      MLFLOW_BACKEND_STORE_URI: ${MLFLOW_BACKEND_STORE_URI:-postgresql://${POSTGRES_USER:-mlflow}:${POSTGRES_PASSWORD:-mlflow}@postgres:${PGPORT:-5432}/${POSTGRES_DB:-mlflow}}
+      # S3/RustFS settings
+      MLFLOW_S3_ENDPOINT_URL: ${MLFLOW_S3_ENDPOINT_URL:-http://storage:9000}
+      MLFLOW_ARTIFACTS_DESTINATION: ${MLFLOW_ARTIFACTS_DESTINATION:-s3://${S3_BUCKET:-mlflow}}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-s3admin}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-s3admin}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+      MLFLOW_S3_IGNORE_TLS: "true"
+      # Server host/port
+      MLFLOW_HOST: ${MLFLOW_HOST:-0.0.0.0}
+      MLFLOW_PORT: ${MLFLOW_PORT:-5001}
+    # Lets the gateway reach a provider on the host (e.g. Ollama) on Linux too.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./mlflow/bootstrap:/opt/mlflow-bootstrap:ro
+    entrypoint: [ sh, /opt/mlflow-bootstrap/entrypoint.sh ]
+    command:
+      - /bin/bash
+      - -c
+      - |
+        set -e
+        pip install --no-cache-dir psycopg2-binary boto3
+        exec mlflow server \
+          --backend-store-uri "${MLFLOW_BACKEND_STORE_URI:-postgresql://${POSTGRES_USER:-mlflow}:${POSTGRES_PASSWORD:-mlflow}@postgres:${PGPORT:-5432}/${POSTGRES_DB:-mlflow}}" \
+          --artifacts-destination "${MLFLOW_ARTIFACTS_DESTINATION:-s3://${S3_BUCKET:-mlflow}}" \
+          --serve-artifacts \
+          --host "${MLFLOW_HOST:-0.0.0.0}" \
+          --port "${MLFLOW_PORT:-5001}"
+    ports:
+      - "${MLFLOW_PORT:-5001}:${MLFLOW_PORT:-5001}"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:${MLFLOW_PORT:-5001}/health')",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+networks:
+  default:
+    name: ai-software-factory-network
+    external: true
+
+volumes:
+  pgdata:
+  storage-data:
+  dolt-data:

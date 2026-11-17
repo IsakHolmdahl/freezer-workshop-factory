@@ -1,0 +1,14 @@
+schema_version: "1"
+description: "Release engineer — generates semantic daily release notes from git history"
+agent_instructions: agents.md
+system_prompt: system-prompt.md
+model: small
+
+max_model_calls: 60
+max_duration: "45m"
+
+skills:
+  - uri: "skill://scion/global/output-discipline"
+  - uri: "skill://scion/global/artifact-durability"
+  - uri: "skill://scion/global/beads-work-tracking"
+  - uri: "skill://scion/global/release-notes-daily"

@@ -1,0 +1,109 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+harness: asf-opencode
+image: asf-opencode:latest
+user: scion
+
+provisioner:
+  type: container-script
+  interface_version: 1
+  lib: vendored
+  command: ["python3", "/home/scion/.scion/harness/provision.py"]
+  timeout: 30s
+  lifecycle_events:
+    - pre-start
+  required_image_tools: [python3, node, opencode, scion, sciontool, bd, dolt, rtk]
+
+config_dir: .config/opencode
+skills_dir: .config/opencode/skills
+interrupt_key: C-c
+# Same values as upstream scion/harnesses/opencode (see the authoring guide).
+ready:
+  strategy: delay
+  settle: 8s
+delivery:
+  submit_keys: [Enter]
+  extra_submits: 2
+  extra_submit_delay: 300ms
+# OpenCode reads ~/.config/opencode/AGENTS.md as its global rules.
+instructions_file: .config/opencode/AGENTS.md
+# OpenCode has no system-prompt flag: provision.py writes the template prompt
+# here and points the primary agent's `prompt` at it (opencode.json).
+system_prompt_file: .config/opencode/system-prompt.md
+system_prompt_mode: native
+
+# Models of the agent gateway (asf.yaml agent_gateway.models), in OpenCode's
+# provider/model form; the provider "gateway" is written by provision.py.
+model_aliases:
+  small: gateway/small
+  medium: gateway/medium
+  large: gateway/large
+  extra-large: gateway/large
+
+command:
+  # opencode-launch.sh hides GITHUB_TOKEN from OpenCode (it would otherwise be
+  # taken for a GitHub Copilot credential) and keeps git working with it.
+  # task_position matches upstream: `opencode --prompt <task> <base_args...>`.
+  base: ["sh", "/home/scion/.local/bin/opencode-launch.sh"]
+  resume_flag: "--continue"
+  task_flag: "--prompt"
+  task_position: before_base_args
+
+# AGENT_GATEWAY_* are not set here: container env would override the validated
+# values provision.py writes. ./setup.py sets them as Hub variables from asf.yaml.
+env:
+  OPENCODE_DISABLE_AUTOUPDATE: "1"
+  OPENCODE_DISABLE_LSP_DOWNLOAD: "1"
+  SCION_USAGE_SOURCE: "hooks"
+
+capabilities:
+  limits:
+    max_turns: { support: "yes" }
+    max_model_calls: { support: "partial", reason: "model-end per step-finish part; no explicit model-start event" }
+    max_duration: { support: "yes" }
+  telemetry:
+    enabled: { support: "partial", reason: "Lifecycle and token usage via hooks; no OTEL configuration" }
+    native_emitter: { support: "no", reason: "Native telemetry forwarding is not wired for this harness" }
+  prompts:
+    system_prompt: { support: "yes", reason: "Replaces the primary agent's prompt (agent.build.prompt)" }
+    agent_instructions: { support: "yes" }
+  auth:
+    api_key: { support: "yes", reason: "AGENT_GATEWAY_API_KEY for the agent gateway" }
+    auth_file: { support: "no" }
+    oauth_token: { support: "no" }
+    vertex_ai: { support: "no" }
+  mcp:
+    stdio: { support: "yes" }
+    sse: { support: "yes" }
+    streamable_http: { support: "yes" }
+    project_scope: { support: "no", reason: "OpenCode does not distinguish project-scoped MCP" }
+  resume: { support: "yes" }
+
+no_auth:
+  behavior: drop-to-shell
+  message: |
+    This OpenCode configuration uses the agent gateway (AGENT_GATEWAY_URL).
+    Set AGENT_GATEWAY_API_KEY as a Hub secret (./setup.py does this; a local
+    gateway accepts any value).
+
+auth:
+  default_type: api-key
+  types:
+    api-key:
+      required_env:
+        - any_of: ["AGENT_GATEWAY_API_KEY"]
+  autodetect:
+    env:
+      AGENT_GATEWAY_API_KEY: api-key

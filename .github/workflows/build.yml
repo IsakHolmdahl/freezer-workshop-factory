@@ -1,0 +1,185 @@
+name: Build
+
+# Tests every change; builds all images. Pushes to the project's GitHub
+# Container Registry (ghcr.io/<owner>/<image>) on main, on version tags and on
+# manual runs. Image graph and build commands: scripts/ci-images.py.
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      images:
+        description: "Comma-separated images to build (empty: all; their base images are always included)"
+        required: false
+        type: string
+        default: ""
+      platforms:
+        description: "Platforms to publish"
+        required: true
+        type: choice
+        default: linux/amd64,linux/arm64
+        options:
+          - linux/amd64,linux/arm64
+          - linux/amd64
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  PUSH: ${{ github.event_name != 'pull_request' }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: scripts/requirements*.txt
+
+      - name: Prepare Python environment
+        run: make venv
+
+      - name: Script tests
+        run: make test
+
+      - name: Bootstrap shell syntax
+        run: sh -n scripts/docker-python.sh
+
+      - name: OpenCode harness tests
+        working-directory: harness-configs/asf-opencode
+        run: ../../.venv/bin/python -m unittest provision_test asf_entrypoint_test
+
+      - name: Compose files are valid
+        env:
+          SCION_IMAGE_REGISTRY: ghcr.io/${{ github.repository_owner }}
+        run: |
+          docker network create ai-software-factory-network
+          docker compose -f compose.yaml config -q
+          docker compose -f compose.yaml --profile scion config -q
+          docker compose -f compose.yaml -f compose/hub-prod.yaml config -q
+          docker compose -f compose/containers.yaml config -q
+
+  docker-python:
+    name: Python fallback (Docker Alpine)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Accept Docker fallback when host Python is unavailable
+        run: |
+          make venv PYTHON=asf-missing-python <<<'yes'
+          test ! -e .venv
+
+      - name: Verify container Python and installed dependencies
+        run: |
+          docker run --rm \
+            --mount type=volume,source=asf-python312-alpine,target=/opt/asf-python \
+            python:3.12-alpine "/opt/asf-python/$(id -u)/venv/bin/python" \
+            -c 'import sys, requests, dotenv, yaml, questionary, rich; assert sys.version_info[:2] == (3, 12)'
+          docker run --rm \
+            --mount type=volume,source=asf-python312-alpine,target=/opt/asf-python \
+            python:3.12-alpine "/opt/asf-python/$(id -u)/venv/bin/python" -m pip check
+
+      - name: Verify cached environment can be reused
+        run: |
+          make venv PYTHON=asf-missing-python <<<'yes'
+          test ! -e .venv
+
+  images:
+    needs: [test, docker-python]
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Prepare configured Scion source
+        run: |
+          make venv
+          .venv/bin/python scripts/scion_source.py
+
+      # Many images: the runner's default free disk is not enough.
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          docker system prune -af >/dev/null
+          df -h /
+
+      - name: Image tags
+        id: tags
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          tags=(--tag "sha-${GITHUB_SHA::12}")
+          if [[ "$GITHUB_REF" == "refs/heads/${{ github.event.repository.default_branch }}" ]]; then
+            tags+=(--tag latest)
+          fi
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            tags+=(--tag "${GITHUB_REF_NAME}")
+          fi
+          echo "registry=ghcr.io/${owner}" >> "$GITHUB_OUTPUT"
+          echo "args=${tags[*]}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up QEMU
+        if: env.PUSH == 'true'
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        if: env.PUSH == 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        if: env.PUSH == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Pull requests: one platform, local Docker, nothing pushed.
+      - name: Build images (pull request)
+        if: env.PUSH != 'true'
+        run: .venv/bin/python scripts/ci-images.py build --registry "${{ steps.tags.outputs.registry }}" ${{ steps.tags.outputs.args }}
+
+      - name: Build and push images
+        if: env.PUSH == 'true'
+        env:
+          PLATFORMS: ${{ inputs.platforms || 'linux/amd64,linux/arm64' }}
+          ONLY: ${{ inputs.images }}
+        run: |
+          .venv/bin/python scripts/ci-images.py build --push --platforms "$PLATFORMS" --only "$ONLY" \
+            --registry "${{ steps.tags.outputs.registry }}" ${{ steps.tags.outputs.args }}
+
+      - name: Summary
+        if: env.PUSH == 'true'
+        run: |
+          {
+            echo "### Published to ${{ steps.tags.outputs.registry }}"
+            echo
+            echo "Tags: \`${{ steps.tags.outputs.args }}\`" | sed 's/--tag //g'
+            echo
+            .venv/bin/python scripts/ci-images.py list | sed 's/^/- /'
+          } >> "$GITHUB_STEP_SUMMARY"

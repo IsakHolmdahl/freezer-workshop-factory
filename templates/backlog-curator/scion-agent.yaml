@@ -1,0 +1,18 @@
+schema_version: "1"
+description: "Backlog curator — audits and prunes project memories (bd memories), closes obsolete/duplicate beads, and compacts old history"
+agent_instructions: agents.md
+system_prompt: system-prompt.md
+model: small
+max_duration: "20m"
+max_turns: 40
+env:
+  DOLT_URL: "mysql://beads@127.0.0.1:3307" 
+secrets:
+  - key: DOLT_DB_PASSWORD
+    description: "Dolt application password for project Beads databases"
+    type: environment
+skills:
+  - uri: "skill://scion/global/output-discipline"
+  - uri: "skill://scion/global/artifact-durability"
+  - uri: "skill://scion/global/beads-work-tracking"
+  - uri: "skill://scion/global/beads-hygiene"

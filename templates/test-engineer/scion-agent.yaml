@@ -1,0 +1,19 @@
+schema_version: "1"
+description: "QA engineer — designs test suites, writes tests, analyzes coverage gaps, and validates bug fixes"
+agent_instructions: agents.md
+system_prompt: system-prompt.md
+model: medium
+
+max_model_calls: 60
+max_duration: "45m"
+
+skills:
+  - uri: "skill://scion/global/output-discipline"
+  - uri: "skill://scion/global/structural-code-search"
+  - uri: "skill://scion/global/artifact-durability"
+  - uri: "skill://scion/global/beads-work-tracking"
+  - uri: "skill://scion/global/code-review"
+  - uri: "skill://scion/global/code-review-and-quality"
+  - uri: "gh://addyosmani/agent-skills/debugging-and-error-recovery"
+  - uri: "skill://scion/global/test-driven-development"
+  - uri: "gh://addyosmani/agent-skills/using-agent-skills"

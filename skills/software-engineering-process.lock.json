@@ -1,0 +1,8 @@
+{
+  "uri": "skill://scion/global/software-engineering-process@3.2.0",
+  "version": "3.2.0",
+  "files": {
+    "SKILL.md": "9ce747a2a79df0fa6c9878ee5b64dc1c2d620c0690cd20eb51eccee5f3c4d22e",
+    "references/em-brief-template.md": "4fce0d3721f3797acd0ea1438e1c8e11f61b900702c91518683d54352c23c1d3"
+  }
+}

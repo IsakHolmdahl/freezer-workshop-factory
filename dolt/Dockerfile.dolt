@@ -1,0 +1,15 @@
+# Wrap checksum-verified Dolt CLI 2.0.7 with a pre-listener bootstrap.
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl python3 \
+ && rm -rf /var/lib/apt/lists/* \
+ && cd /tmp \
+ && curl -fsSLo dolt.tgz "https://github.com/dolthub/dolt/releases/download/v2.0.7/dolt-linux-amd64.tar.gz" \
+ && echo "8e09138596763896cbce0632cd6e779fa1df405334c6c148bc314539a3b9795a  dolt.tgz" | sha256sum -c - \
+ && tar xzf dolt.tgz dolt-linux-amd64/bin/dolt \
+ && install -m 755 dolt-linux-amd64/bin/dolt /usr/local/bin/dolt \
+ && rm -rf dolt.tgz dolt-linux-amd64 \
+ && dolt version
+COPY dolt.py lib.py /opt/dolt/
+WORKDIR /var/lib/dolt
+ENTRYPOINT ["python3", "/opt/dolt/dolt.py"]
+CMD ["start"]

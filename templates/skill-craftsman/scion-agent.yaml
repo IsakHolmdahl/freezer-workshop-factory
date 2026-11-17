@@ -1,0 +1,13 @@
+schema_version: "1"
+description: "Agent skill craftsman that designs and authors portable, high-signal SKILL.md modules and reference files adhering to the agentskills.io standard."
+agent_instructions: agents.md
+system_prompt: system-prompt.md
+max_model_calls: 60
+max_duration: "45m"
+
+skills:
+  - uri: "skill://scion/global/output-discipline"
+  - uri: "skill://scion/global/artifact-durability"
+    optional: true
+  - uri: "skill://scion/global/beads-work-tracking"
+    optional: true

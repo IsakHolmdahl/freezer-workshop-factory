@@ -1,0 +1,6 @@
+requests>=2.31
+python-dotenv>=1.0
+PyYAML>=6.0
+questionary>=2.0
+rich==15.0.0
+keyring>=25.6

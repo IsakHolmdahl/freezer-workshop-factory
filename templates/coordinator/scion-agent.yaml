@@ -1,0 +1,24 @@
+schema_version: "1"
+description: "Project coordinator — manages agent teams, delegates all implementation, drives progress autonomously"
+agent_instructions: agents.md
+system_prompt: system-prompt.md
+model: medium
+message_mode: hub
+
+max_duration: "4h"
+
+env:
+  DOLT_URL: "mysql://beads@127.0.0.1:3307"
+  # asf-entrypoint: this agent starts the project's MLflow trace session.
+  ASF_TRACE_ROOT: "true"
+secrets:
+  - key: DOLT_DB_PASSWORD
+    description: "Dolt application password for project Beads databases"
+    type: environment
+skills:
+  - uri: "skill://scion/global/output-discipline"
+  - uri: "skill://scion/global/artifact-durability"
+  - uri: "skill://scion/global/agent-state-continuity"
+  - uri: "skill://scion/global/beads-orchestration"
+  - uri: "skill://scion/global/software-engineering-process"
+  - uri: "skill://scion/global/cross-project-delegation"

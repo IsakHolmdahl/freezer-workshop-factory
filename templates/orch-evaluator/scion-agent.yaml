@@ -1,0 +1,13 @@
+schema_version: "1"
+description: "Orchestration evaluator and red-team verifier that statically lints and behaviorally stress-tests Scion templates, skills, and workflows for schema violations, deadlocks, stall risks, and durability defects."
+agent_instructions: agents.md
+system_prompt: system-prompt.md
+max_model_calls: 60
+max_duration: "45m"
+
+skills:
+  - uri: "skill://scion/global/output-discipline"
+  - uri: "skill://scion/global/artifact-durability"
+    optional: true
+  - uri: "skill://scion/global/beads-work-tracking"
+    optional: true

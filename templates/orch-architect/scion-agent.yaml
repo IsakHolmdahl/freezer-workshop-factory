@@ -1,0 +1,12 @@
+schema_version: "1"
+description: "Meta-orchestrator and systems architect that designs multi-agent team topologies, authors orchestration blueprints, and coordinates template-engineer, skill-craftsman, orch-evaluator, and orch-curator."
+agent_instructions: agents.md
+system_prompt: system-prompt.md
+max_duration: "4h"
+
+skills:
+  - uri: "skill://scion/global/output-discipline"
+  - uri: "skill://scion/global/artifact-durability"
+    optional: true
+  - uri: "skill://scion/global/beads-work-tracking"
+    optional: true
